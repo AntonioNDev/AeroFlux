@@ -1,7 +1,7 @@
 # Wind Tunnel
 
     conda env create -f requirements.yaml
-    conda activate windtunnel
+    conda activate AeroFlux
     python main.py
 
     ui/          window, theme, widgets, 2-thread job queue
