@@ -239,3 +239,187 @@ class MeshModel:
         errors.extend(self.validate_geometry())
 
         return errors
+
+    def analyze_edges(self) -> dict:
+        """
+            Analyze mesh edge connectivity.
+
+            Returns:
+                Edge statistics and detected boundary/non-manifold edges.
+        """
+        
+        edges = np.vstack([
+            self.faces[:, [0,1]],
+            self.faces[:, [1,2]],
+            self.faces[:, [2,0]]
+        ])
+
+        edges = np.sort(edges, axis=1)
+
+        unique_edges, counts = np.unique(edges, axis=0, return_counts=True)
+
+        boundary_edges = unique_edges[counts == 1]
+        interior_edges = unique_edges[counts == 2]
+        non_manifold_edges = unique_edges[counts > 2]
+
+        return {
+            "total_edges": len(unique_edges),
+            "unique_edges": unique_edges,
+            "edge_counts": counts,
+            "boundary_edges": boundary_edges,
+            "interior_edges": interior_edges,
+            "non_manifold_edges": non_manifold_edges,
+        }
+
+    def connected_components(self) -> list[list[int]]:
+        """
+            Find connected groups of triangles using shared edges with DFS
+            (Depth-First-Search).
+
+            Returns:
+                Lists containing face indices for each component.
+        """
+        edge_to_faces = {}
+
+        for face_id, (a, b, c) in enumerate(self.faces):
+            for u, v in ((a, b), (b, c), (c, a)):
+                edge = tuple(sorted((int(u), int(v))))
+                edge_to_faces.setdefault(edge, []).append(face_id)
+
+        visited = set()
+        components = []
+
+        for start_face in range(len(self.faces)):
+            if start_face in visited:
+                continue
+
+            stack = [start_face]
+            component = []
+
+            while stack:
+                current = stack.pop()
+
+                if current in visited:
+                    continue
+
+                visited.add(current)
+                component.append(current)
+
+                a, b, c = self.faces[current]
+
+                for u, v in ((a, b), (b, c), (c, a)):
+                    edge = tuple(sorted((int(u), int(v))))
+
+                    neighbors = edge_to_faces.pop(edge, [])
+
+                    for neighbor in neighbors:
+                        if neighbor not in visited:
+                            stack.append(neighbor)
+
+            components.append(component)
+
+        return components
+
+    def analyze_winding(self) -> dict:
+        """
+            Detect shared edges with inconsistent face orientation.
+        """
+
+        directed_edges = np.stack([
+                self.faces[:, [0,1]],
+                self.faces[:, [1,2]],
+                self.faces[:, [2,0]]
+            ],
+            axis=1
+        )
+
+        edge_groups = {}
+        for face_edges in directed_edges:
+            for u, v in face_edges:
+                directed = (int(u), int(v))
+                undirected = tuple(sorted(directed))
+
+                edge_groups.setdefault(undirected, []).append(directed)
+
+        inconsistent_edges = []
+        for edge, directions in edge_groups.items():
+            if len(directions) != 2:
+                continue
+
+            first, second = directions
+
+            if first == second:
+                inconsistent_edges.append(edge)
+
+        return {
+            "inconsistent_edges": inconsistent_edges,
+            "count": len(inconsistent_edges)
+        }
+
+    def analyze_quality(self) -> dict:
+        """
+        Calculate triangle quality metrics.
+
+        Returns:
+            Minimum angles, edge aspect ratios,
+            and statistics for mesh diagnostics.
+        """
+
+        tri = self.vertices[self.faces]
+
+        # edges lengths
+        A = tri[:, 0, :]
+        B = tri[:, 1, :]
+        C = tri[:, 2, :]
+
+        # lengths of edges (a,b,c)
+        a = np.linalg.norm(B - A, axis=1)
+        b = np.linalg.norm(C - B, axis=1)
+        c = np.linalg.norm(A - C, axis=1)
+
+        edges = np.stack([a, b, c], axis=1)
+
+        shortest_edges = np.min(edges, axis=1)
+        longest_edges = np.max(edges, axis=1)
+
+        aspect_ratios = np.divide( # We use np.inf to prevent zero-length edges, and devision with Zero
+            longest_edges,
+            shortest_edges,
+            out=np.full_like(longest_edges, np.inf),
+            where=shortest_edges > 0
+        )
+
+        cos_A = (a**2 + c**2 - b**2) / (2 * a * c)
+        cos_B = (a**2 + b**2 - c**2) / (2 * a * b)
+        cos_C = (b**2 + c**2 - a**2) / (2 * b * c)
+
+        cos_A = np.clip(cos_A, -1.0, 1.0)
+        cos_B = np.clip(cos_B, -1.0, 1.0)
+        cos_C = np.clip(cos_C, -1.0, 1.0)
+
+        angle_A = np.degrees(np.arccos(cos_A))
+        angle_B = np.degrees(np.arccos(cos_B))
+        angle_C = np.degrees(np.arccos(cos_C))
+
+        angles = np.stack(
+            [angle_A, angle_B, angle_C],
+            axis=1
+        )
+
+        minimum_angles = np.min(angles, axis=1)
+
+        MIN_ANGLE_THRESHOLD = 10.0
+
+        poor_quality_faces = np.where(
+            minimum_angles < MIN_ANGLE_THRESHOLD
+        )[0]
+
+        return {
+            "aspect_ratios": aspect_ratios,
+            "minimum_angles": minimum_angles,
+            "min_angle": float(np.min(minimum_angles)),
+            "max_aspect_ratio": float(np.max(aspect_ratios)),
+            "mean_aspect_ratio": float(np.mean(aspect_ratios)),
+            "poor_quality_faces": poor_quality_faces,
+            "poor_quality_count": len(poor_quality_faces),
+        }
