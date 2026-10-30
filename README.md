@@ -1,21 +1,13 @@
-# AeroFlux
+# Wind Tunnel
 
-AeroFlux is a modular desktop simulation platform designed to analyze the aerodynamic and thermodynamic behavior of imported 3D objects. From aircraft and vehicles to custom geometries, AeroFlux aims to visualize airflow, pressure distributions, temperature fields, and other physical properties through interactive simulations.
+    conda env create -f requirements.yaml
+    conda activate windtunnel
+    python main.py
 
-✈️ Vision
+    ui/          window, theme, widgets, 2-thread job queue
+    rendering/   embedded matplotlib view, MATLAB launcher, render_session.m, file export
+    formulas/    mesh loading, TestSettings/TestResult/Solver contract, placeholder solver
+    output/      every run is saved here automatically (run.mat + summary.json)
 
-Import a 3D object, configure the simulation, run the analysis, and explore the results in an interactive 3D environment.
-
-Core Features
-
-Geometry Import — Load supported 3D models or connect custom geometry modules.
-
-Simulation Engine — Analyze airflow, pressure distributions, temperature fields, and heat transfer.
-
-Interactive Visualization — Explore the object, inspect pressure points, and visualize airflow and thermal fields.
-
-Scientific Computing — Use NumPy and SciPy for numerical methods, with optional MATLAB integration.
-
-Results & Diagnostics — Display simulation metrics, field plots, and analysis summaries.
-
-AI-Assisted Analysis (Planned) — Generate recommendations and identify potential design improvements.
+Shortcuts: Ctrl/Cmd+O import, Ctrl/Cmd+S save data, Ctrl/Cmd+R restart, F5 start, Space play/pause.
+Mouse in the 3D view: left drag rotates, right drag zooms, middle drag pans, wheel zooms.
