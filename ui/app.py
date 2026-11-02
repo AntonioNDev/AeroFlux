@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from formulas.mesh import EXTENSIONS, MeshModel
+from formulas.diagnostics import analyze_mesh
 from formulas.pipeline import Solver, TestSettings, run_test
 from rendering.export import OUTPUT_DIR, export_file, write_run
 from rendering.matlab_view import MatlabView
@@ -227,6 +228,24 @@ class App(tk.Tk):
             self.cards[key] = card
 
         ttk.Label(inner, text="ADVISOR", style="Section.TLabel").pack(anchor="w", pady=(16, 6))
+        self.geometry_panel = Collapsible(inner, "GEOMETRY DIAGNOSTICS", opened=False)
+        self.geometry_panel.pack(fill="x", pady=(16, 8))
+        self.diagnostics_text = tk.Text(
+            self.geometry_panel.body,
+            height=11,
+            wrap="word",
+            bd=0,
+            highlightthickness=1,
+            padx=10,
+            pady=8,
+            bg=C["card"],
+            fg=C["text"],
+            highlightbackground=C["line"],
+            font=self.fonts["small"],
+        )
+        self.diagnostics_text.pack(fill="x")
+        self._set_diagnostics(None)
+
         self.advice = tk.Text(inner, height=8, wrap="word", bd=0, highlightthickness=1, padx=10, pady=8,
                               bg=C["card"], fg=C["text"], highlightbackground=C["line"],
                               insertbackground=C["text"], font=self.fonts["small"])
@@ -249,7 +268,6 @@ class App(tk.Tk):
         return bar
 
     # actions
-
     def import_model(self):
         if "run" in self._active:
             return
@@ -338,12 +356,22 @@ class App(tk.Tk):
             row.set(values.get(key, row.spec.default))
 
     # jobs, these run on the worker threads
-
     def _load_job(self, ctx, path):
         ctx.progress(0.2, "Reading file")
-        model = MeshModel.demo() if path is None else MeshModel.from_file(path)
+
+        model = (
+            MeshModel.demo()
+            if path is None
+            else MeshModel.from_file(path)
+        )
+
+        ctx.progress(0.5, "Analyzing geometry")
+        diagnostics = analyze_mesh(model)
+
         ctx.progress(0.8, "Building preview")
-        return model, model.scaled_to(1.0).simplified(PREVIEW_FACES)
+        preview = model.scaled_to(1.0).simplified(PREVIEW_FACES)
+
+        return model, preview, diagnostics
 
     def _run_job(self, ctx, model, settings):
         result = run_test(self.solver, model, settings, ctx.progress, self.advisor)
@@ -363,7 +391,6 @@ class App(tk.Tk):
         return mat_file
 
     # tk thread
-
     def _submit(self, kind, fn, *args, supersede=True):
         self._active[kind] = self.pool.submit(kind, fn, *args, supersede=supersede)
         self._refresh()
@@ -399,11 +426,14 @@ class App(tk.Tk):
         self.progress.configure(value=100 if kind in ("load", "run") else 0)
         self.after(900, lambda: None if self._active else self.progress.configure(value=0))
         if kind == "load":
-            self.model, preview = value
+            self.model, preview, diagnostics = value
+
             self.result = None
             self._reset_results()
             self.scene.show_model(preview)
             self._update_model_card()
+            self._set_diagnostics(diagnostics)
+
             self.title(f"Wind Tunnel · {self.model.name}")
             self.status.set("Model loaded, press Start test")
         elif kind == "run":
@@ -442,6 +472,36 @@ class App(tk.Tk):
         else:
             self.advice.insert("1.0", "No advisor connected yet.")
         self.advice.configure(state="disabled")
+
+    def _set_diagnostics(self, report):
+        widget = self.diagnostics_text
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+
+        if report is None:
+            content = "Import a model to view diagnostics."
+        else:
+            content = (
+                f"Vertices: {report.vertices:,}\n"
+                f"Triangles: {report.faces:,}\n"
+                f"Components: {report.connected_components}\n"
+                f"Boundary edges: {report.boundary_edges}\n"
+                f"Non-manifold edges: {report.non_manifold_edges}\n"
+                f"Inconsistent edges: {report.inconsistent_edges}\n"
+                f"Minimum angle: {report.minimum_angle:.2f}°\n"
+                f"Max aspect ratio: {report.maximum_aspect_ratio:.2f}\n"
+                f"Poor-quality faces: {report.poor_quality_faces}\n\n"
+                f"Warnings:\n"
+            )
+
+            content += (
+                "\n".join(f"• {w}" for w in report.warnings)
+                if report.warnings
+                else "None"
+            )
+
+        widget.insert("1.0", content)
+        widget.configure(state="disabled")
 
     def _update_model_card(self):
         if self.model is None:
