@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
+from .atmosphere import AtmosphereState, calculate_atmosphere
 from math import cos, radians, sin
 from time import perf_counter
 from typing import Callable
@@ -45,6 +46,8 @@ class TestResult:
     solver: str = ""
     elapsed: float = 0.0
 
+    atmosphere: AtmosphereState | None = None # atmospheric conditions used for this simulation
+
 class Solver(ABC):
     """Subclass this in formulas/ and hand it to App in main.py."""
 
@@ -68,14 +71,25 @@ def run_test(solver: Solver, model: MeshModel, settings: TestSettings, progress:
     if not isinstance(model, MeshModel):
         raise ValueError("A valid MeshModel must be loaded.")
 
+    atmosphere = calculate_atmosphere(altitude_m=settings.altitude, speed_mps=settings.speed)
+    
     progress(0.03, "Preparing mesh")
     prepared = model.scaled_to(settings.model_length).simplified(settings.mesh_detail)
 
     started = perf_counter()
+
     result = solver.run(prepared, settings, progress)
+    result.atmosphere = atmosphere
+
     result.elapsed = perf_counter() - started
     result.solver = solver.name
+
     result.summary["elapsed_s"] = result.elapsed
+    result.summary["mach"] = atmosphere.mach
+    result.summary["air_density_kg_m3"] = atmosphere.density_kg_m3
+    result.summary["ambient_pressure_pa"] = atmosphere.pressure_pa
+    result.summary["ambient_temperature_k"] = atmosphere.temperature_k
+    result.summary["speed_of_sound_mps"] = atmosphere.speed_of_sound_mps
 
     if advisor is not None:
         progress(0.93, "Asking advisor")

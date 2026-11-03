@@ -48,6 +48,10 @@ STATS = (
     ("cl", "Lift coeff.", "", 1, "{:.3f}"),
     ("max_pressure_pa", "Peak pressure", "kPa", 1e-3, "{:,.1f}"),
     ("max_temp_k", "Peak wall temp", "K", 1, "{:,.0f}"),
+    ("ambient_temperature_k", "Ambient temp", "K", 1, "{:.2f}"),
+    ("ambient_pressure_pa", "Ambient pressure", "kPa", 1e-3, "{:,.2f}"),
+    ("air_density_kg_m3", "Air density", "kg/m³", 1, "{:.4f}"),
+    ("speed_of_sound_mps", "Speed of sound", "m/s", 1, "{:.2f}"),
 )
 
 

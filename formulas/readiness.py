@@ -48,6 +48,7 @@ def validate_settings(settings: TestSettings) -> ReadinessReport:
         Validate the numerical and structural configuration
         before AeroFlux starts a simulation.
     """
+    from .atmosphere import (EARTH_RADIUS_M, MAX_GEOPOTENTIAL_ALTITUDE_M)
 
     report = ReadinessReport()
 
@@ -59,6 +60,17 @@ def validate_settings(settings: TestSettings) -> ReadinessReport:
         ("turbulence", "Turbulence", 0.0),
         ("thermal_weight", "Thermal weight", 0.0),
     ]
+
+    max_geometric_altitude = (
+    EARTH_RADIUS_M * MAX_GEOPOTENTIAL_ALTITUDE_M
+        / (EARTH_RADIUS_M - MAX_GEOPOTENTIAL_ALTITUDE_M)
+    )
+
+    if (isinstance(settings.altitude, (int, float)) and math.isfinite(settings.altitude) and settings.altitude > max_geometric_altitude):
+        report.errors.append(
+            "Altitude exceeds the current ISA model range "
+            f"(maximum {max_geometric_altitude:.0f} m geometric altitude)."
+        )
 
     for attribute, label, minimum in numeric_rules:
         value = getattr(settings, attribute)
