@@ -12,7 +12,6 @@ from .mesh import MeshModel
 
 Progress = Callable[[float, str], None]
 
-
 @dataclass(frozen=True)
 class TestSettings:
     speed: float = 120.0          # m/s
@@ -33,7 +32,6 @@ class TestSettings:
     def as_dict(self) -> dict:
         return asdict(self)
 
-
 @dataclass
 class TestResult:
     model: MeshModel
@@ -47,7 +45,6 @@ class TestResult:
     solver: str = ""
     elapsed: float = 0.0
 
-
 class Solver(ABC):
     """Subclass this in formulas/ and hand it to App in main.py."""
 
@@ -58,9 +55,19 @@ class Solver(ABC):
     def run(self, model: MeshModel, settings: TestSettings, progress: Progress) -> TestResult:
         ...
 
+def run_test(solver: Solver, model: MeshModel, settings: TestSettings, progress: Progress, advisor=None) -> TestResult:
+    # we import it logally to avoid circular dependency
+    from .readiness import validate_settings
+    
+    readiness = validate_settings(settings)
 
-def run_test(solver: Solver, model: MeshModel, settings: TestSettings,
-             progress: Progress, advisor=None) -> TestResult:
+    if not readiness.can_run:
+        raise ValueError("Invalid simulation configuration:\n"
+                        + "\n".join(readiness.errors))
+
+    if not isinstance(model, MeshModel):
+        raise ValueError("A valid MeshModel must be loaded.")
+
     progress(0.03, "Preparing mesh")
     prepared = model.scaled_to(settings.model_length).simplified(settings.mesh_detail)
 

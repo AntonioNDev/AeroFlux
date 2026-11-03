@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Generated simulation output
+output/*
+!output/.gitkeep
+
+# Temporary files
+*.log
+*.tmp
+
+# Todo file
+TODO.todo

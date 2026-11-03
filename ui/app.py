@@ -6,6 +6,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from formulas.mesh import EXTENSIONS, MeshModel
 from formulas.diagnostics import analyze_mesh
+from formulas.readiness import check_readiness
 from formulas.pipeline import Solver, TestSettings, run_test
 from rendering.export import OUTPUT_DIR, export_file, write_run
 from rendering.matlab_view import MatlabView
@@ -58,6 +59,7 @@ class App(tk.Tk):
         self.matlab = MatlabView()
         self.pool = JobPool(workers=2)
         self.model = None
+        self.mesh_diagnostics = None
         self.result = None
         self.out_folder = None
         self._active = {}
@@ -292,11 +294,34 @@ class App(tk.Tk):
         except ValueError:
             self.status.set("Model length must be a number above 0")
             return
+        
         values = {key: row.get() for key, row in self.rows.items()}
         values["mesh_detail"] = int(values["mesh_detail"])
         values["line_count"] = int(values["line_count"])
-        settings = TestSettings(model_length=length, **values)
 
+        settings = TestSettings(model_length=length, **values)
+        readiness = check_readiness(self.model, settings, diagnostics=self.mesh_diagnostics)
+
+        if not readiness.can_run:
+            messagebox.showerror(
+                "Simulation Configuration Error",
+                "\n".join(readiness.errors),
+            )
+            self.status.set("Simulation blocked: invalid configuration")
+
+        if readiness.warnings:
+            proceed = messagebox.askyesno(
+                "Geometry Warnings",
+                "Potential geometry issues detected:\n\n"
+                + "\n".join(readiness.warnings)
+                + "\n\nContinue simulation?",
+            )
+
+            if not proceed:
+                self.status.set("Simulation cancelled")
+                return
+
+        # Existing simulation logic remains unchanged
         self.scene.clear_result()
         self._reset_results()
         self._submit("run", self._run_job, self.model, settings)
@@ -428,6 +453,8 @@ class App(tk.Tk):
         if kind == "load":
             self.model, preview, diagnostics = value
 
+            self.mesh_diagnostics = diagnostics
+
             self.result = None
             self._reset_results()
             self.scene.show_model(preview)
@@ -436,6 +463,7 @@ class App(tk.Tk):
 
             self.title(f"Wind Tunnel · {self.model.name}")
             self.status.set("Model loaded, press Start test")
+
         elif kind == "run":
             self.result, self.out_folder = value
             self.scene.show_result(self.result)
