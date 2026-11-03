@@ -111,3 +111,11 @@ def test_readiness_combines_errors_and_warnings():
     assert not report.can_run
     assert report.errors
     assert report.warnings
+
+def test_altitude_exceeds_isa_range():
+    settings = SimulationSettings(altitude=30000.0)
+
+    report = validate_settings(settings)
+
+    assert not report.can_run
+    assert any("altitude" in error.lower() for error in report.errors)
