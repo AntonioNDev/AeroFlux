@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from .atmosphere import AtmosphereState, calculate_atmosphere
+from .thermal import calculate_thermal_references
 from math import cos, radians, sin
 from time import perf_counter
 from typing import Callable
@@ -84,6 +85,9 @@ def run_test(solver: Solver, model: MeshModel, settings: TestSettings, progress:
     result.elapsed = perf_counter() - started
     result.solver = solver.name
 
+    thermal_references = calculate_thermal_references(atmosphere)
+
+    result.summary.update(thermal_references)
     result.summary["elapsed_s"] = result.elapsed
     result.summary["mach"] = atmosphere.mach
     result.summary["air_density_kg_m3"] = atmosphere.density_kg_m3
